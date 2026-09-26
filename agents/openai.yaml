@@ -1,0 +1,4 @@
+interface:
+  display_name: "JPKara KTV"
+  short_description: "Render Japanese KTV subtitles and karaoke videos"
+  default_prompt: "Use $jpkara-ktv to create or render Japanese KTV subtitles in this workspace."
