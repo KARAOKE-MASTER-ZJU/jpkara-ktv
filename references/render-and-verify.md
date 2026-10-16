@@ -2,6 +2,34 @@
 
 Read this reference when burning ASS subtitles or producing on-vocal/off-vocal MP4 files.
 
+## Lyric/album-cover video
+
+Use `scripts/make_cover_video.py` for a static 16:9 cover video. It accepts either a clean cover image or a crop from a source-video frame, fills the canvas with an enlarged blurred copy, overlays a smaller sharp square, encodes a one-second H.264 loop, and repeats that loop by stream copy. The source video's first AAC stream is copied without re-encoding and verified by packet MD5.
+
+For the proven 1920×1080 layout with extra room above the cover for top lyrics and furigana:
+
+```bash
+python scripts/make_cover_video.py \
+  --source-video input.mp4 --crop 660:240:600 \
+  --cover-size 500 --cover-y 330 --blur-sigma 12 \
+  --output input_cover_replaced.mp4
+```
+
+The crop is song-specific; inspect a frame before choosing it. `--blur-sigma`, `--cover-size`, and `--cover-y` are adjustable. If a label or watermark must be removed, first create or supply a clean `--cover-image`; the script deliberately performs no generative removal and makes no copyright-status claim.
+
+## Paired ON/OFF rendering
+
+Use `scripts/render_on_off.py` when both versions are needed. It burns the ASS into the video once, copies the original/full-mix AAC packet-for-packet into ON VOCAL, encodes the Instrumental to stereo AAC for OFF VOCAL, validates both files, and decodes their final second. Never pass a `Vocals` stem as `--full-mix`.
+
+```bash
+python scripts/render_on_off.py \
+  --video input_cover_replaced.mp4 --ass NEW2.ass \
+  --instrumental '1_input_(Instrumental).wav' \
+  --output-prefix 'song' --preview-png preview.png
+```
+
+Inspect the preview before publishing when layout or fonts changed. The script defaults `--full-mix` to `--video`, uses NVENC when available with a libx264 fallback, and refuses to overwrite existing outputs unless `--overwrite` is supplied.
+
 ## Burn subtitles with NVENC
 
 If an isolated vocals stem is used only as a temporary base, do not label that file `on_vocal`; mux the full mix afterward:
