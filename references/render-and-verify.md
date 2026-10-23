@@ -2,6 +2,21 @@
 
 Read this reference when burning ASS subtitles or producing on-vocal/off-vocal MP4 files.
 
+## Aegisub CLI template expansion
+
+Before burning subtitles into video, expand the ASS template. Use the installed Aegisub CLI executable (Windows EXE under WSL is supported), the existing Karaoke Helper Lua, and Aegisub's `kara-templater.lua`:
+
+```bash
+python scripts/aegisub_cli_template.py /path/to/song/result.ass \
+  --cli /path/to/aegisub-cli.exe \
+  --helper /path/to/automation/autoload/karaoke-helper.lua \
+  --templater /path/to/automation/autoload/kara-templater.lua
+```
+
+This writes `/path/to/song/new.ass`; `result_har.ass` similarly writes `new_har.ass`. Keep those names even when the alignment engine changes. To replace a previously generated `new.ass` after reviewing it, add `--overwrite`. The script runs the GUI-equivalent default K1/K2 settings (`Default`, 2000 ms advance, 1000 ms extension, 4000 ms section gap, countdown enabled), then **Apply karaoke template**. It stages files under the CLI directory by default; use `--scratch-parent` if that directory is not writable. The scratch path must be ASCII-only and accessible to the Windows executable.
+
+Confirm the generated ASS has K1/K2 source comments and expanded `fx` Dialogue rows, preserves lyrics and timing, and has no template Lua errors. The script checks that the generated Dialogue count increased; inspect title lines and a few visual frames separately. On the tested `3·7·5·1·0` sample, its 5599 non-Title effect rows matched Aegisub GUI `new.ass` exactly. This operation produces an ASS file, not a video.
+
 ## Lyric/album-cover video
 
 Use `scripts/make_cover_video.py` for a static 16:9 cover video. It accepts either a clean cover image or a crop from a source-video frame, fills the canvas with an enlarged blurred copy, overlays a smaller sharp square, encodes a one-second H.264 loop, and repeats that loop by stream copy. The source video's first AAC stream is copied without re-encoding and verified by packet MD5.

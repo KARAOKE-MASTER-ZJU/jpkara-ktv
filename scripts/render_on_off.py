@@ -162,14 +162,16 @@ def main() -> None:
         run([
             "ffmpeg", "-nostdin", "-hide_banner", "-y", "-i", str(subbed),
             "-i", str(full_mix), "-map", "0:v:0", "-map", "1:a:0",
-            "-c:v", "copy", "-c:a", "copy", "-shortest", "-movflags", "+faststart",
+            # Do not use -shortest: a one-frame/video-timestamp difference can
+            # silently drop the last packet of the bit-copied ON track.
+            "-c:v", "copy", "-c:a", "copy", "-movflags", "+faststart",
             str(on_temp),
         ])
         run([
             "ffmpeg", "-nostdin", "-hide_banner", "-y", "-i", str(subbed),
             "-i", str(instrumental), "-map", "0:v:0", "-map", "1:a:0",
             "-c:v", "copy", "-c:a", "aac", "-b:a", args.off_bitrate, "-ac", "2",
-            "-shortest", "-movflags", "+faststart", str(off_temp),
+            "-movflags", "+faststart", str(off_temp),
         ])
 
         validate_output(on_temp, width, height)
