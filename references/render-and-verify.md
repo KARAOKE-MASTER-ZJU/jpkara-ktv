@@ -4,16 +4,15 @@ Read this reference when burning ASS subtitles or producing on-vocal/off-vocal M
 
 ## Aegisub CLI template expansion
 
-Before burning subtitles into video, expand the ASS template. Use the installed Aegisub CLI executable (Windows EXE under WSL is supported), the existing Karaoke Helper Lua, and Aegisub's `kara-templater.lua`:
+Before burning subtitles into video, expand the ASS template. From the song directory, with `result.ass` present, the one-line command on this machine is:
 
 ```bash
-python scripts/aegisub_cli_template.py /path/to/song/result.ass \
-  --cli /path/to/aegisub-cli.exe \
-  --helper /path/to/automation/autoload/karaoke-helper.lua \
-  --templater /path/to/automation/autoload/kara-templater.lua
+python /home/birchtree/.codex/skills/jpkara-ktv/scripts/aegisub_cli_template.py result.ass
 ```
 
-This writes `/path/to/song/new.ass`; `result_har.ass` similarly writes `new_har.ass`. Keep those names even when the alignment engine changes. To replace a previously generated `new.ass` after reviewing it, add `--overwrite`. The script runs the GUI-equivalent default K1/K2 settings (`Default`, 2000 ms advance, 1000 ms extension, 4000 ms section gap, countdown enabled), then **Apply karaoke template**. It stages files under the CLI directory by default; use `--scratch-parent` if that directory is not writable. The scratch path must be ASCII-only and accessible to the Windows executable.
+This writes `new.ass`; pass `result_har.ass` to write `new_har.ass`. Keep those names even when the alignment engine changes. To replace a previously generated `new.ass` after reviewing it, add `--overwrite`. The script runs the GUI-equivalent default K1/K2 settings (`Default`, 2000 ms advance, 1000 ms extension, 4000 ms section gap, countdown enabled), then **Apply karaoke template**. It stages files under the CLI directory by default; use `--scratch-parent` if that directory is not writable. The scratch path must be ASCII-only and accessible to the Windows executable.
+
+The skill includes a byte-for-byte snapshot of the 46 `.lua` files under this machine's Aegisub `automation/` directory at `assets/aegisub-automation/`, including `autoload/karaoke-helper.lua` and `autoload/kara-templater.lua`. It does not include MoonScript (`.moon`) files or an Aegisub executable. The Lua sources are associated with [Sonata1015/aegisub-karaoke-helper](https://github.com/Sonata1015/aegisub-karaoke-helper) and [TypesettingTools/Aegisub](https://github.com/TypesettingTools/Aegisub); the CLI is [Myaamori/aegisub-cli](https://github.com/Myaamori/aegisub-cli). These links identify upstream projects, not a claim that every local file is identical to the latest upstream version. Install the CLI beside Aegisub; on another machine pass `--cli /path/to/aegisub-cli.exe` or set `AEGISUB_CLI`. `--helper` and `--templater` can override the bundled Lua files.
 
 Confirm the generated ASS has K1/K2 source comments and expanded `fx` Dialogue rows, preserves lyrics and timing, and has no template Lua errors. The script checks that the generated Dialogue count increased; inspect title lines and a few visual frames separately. On the tested `3·7·5·1·0` sample, its 5599 non-Title effect rows matched Aegisub GUI `new.ass` exactly. This operation produces an ASS file, not a video.
 

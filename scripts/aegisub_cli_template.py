@@ -15,6 +15,8 @@ import tempfile
 
 
 ALIAS = "InterleaveK1K2"
+BUNDLED_AUTOMATION = Path(__file__).resolve().parent.parent / "assets" / "aegisub-automation"
+LOCAL_WSL_CLI = Path("/mnt/e/softwares/aegisub-3.4.1-portable/aegisub-portable/aegisub-cli.exe")
 REGISTRATION = re.compile(
     r"for i = 1, #TLL_macros do\s*"
     r"aegisub\.register_macro\([^\n]*\)\s*end"
@@ -61,16 +63,33 @@ def count_ass(path: Path) -> tuple[int, int]:
     return len(re.findall(r"^Dialogue: ", body, re.M)), len(re.findall(r"^Comment: ", body, re.M))
 
 
+def discover_cli(explicit: Path | None) -> Path | None:
+    candidates = [explicit]
+    configured = os.environ.get("AEGISUB_CLI")
+    if configured:
+        candidates.append(Path(configured))
+    on_path = shutil.which("aegisub-cli.exe") or shutil.which("aegisub-cli")
+    if on_path:
+        candidates.append(Path(on_path))
+    candidates.append(LOCAL_WSL_CLI)
+    return next((path.resolve() for path in candidates if path and path.is_file()), None)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=Path, help="result.ass or result_har.ass")
-    parser.add_argument("--cli", type=Path, required=True, help="aegisub-cli.exe")
-    parser.add_argument("--helper", type=Path, required=True, help="original karaoke-helper.lua")
-    parser.add_argument("--templater", type=Path, required=True, help="Aegisub kara-templater.lua")
+    parser.add_argument("--cli", type=Path, help="aegisub-cli.exe; defaults to AEGISUB_CLI, PATH, or this machine's E: install")
+    parser.add_argument("--helper", type=Path, default=BUNDLED_AUTOMATION / "autoload" / "karaoke-helper.lua",
+                        help="defaults to the skill-bundled karaoke-helper.lua")
+    parser.add_argument("--templater", type=Path, default=BUNDLED_AUTOMATION / "autoload" / "kara-templater.lua",
+                        help="defaults to the skill-bundled kara-templater.lua")
     parser.add_argument("--output", type=Path, help="defaults to new.ass or new_har.ass")
     parser.add_argument("--scratch-parent", type=Path, help="ASCII-only Windows-accessible directory; defaults to CLI directory")
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
+    cli = discover_cli(args.cli)
+    if cli is None:
+        parser.error("aegisub-cli.exe not found; pass --cli or set AEGISUB_CLI")
 
     source = args.input.resolve()
     expected = {"result.ass": "new.ass", "result_har.ass": "new_har.ass"}
@@ -79,13 +98,13 @@ def main() -> None:
     output = (args.output or source.with_name(expected[source.name.lower()])).resolve()
     if source == output:
         parser.error("Output must differ from input")
-    for path in (source, args.cli, args.helper, args.templater):
+    for path in (source, cli, args.helper, args.templater):
         if not path.is_file():
             parser.error(f"File not found: {path}")
     if output.exists() and not args.overwrite:
         parser.error(f"Output already exists: {output}; use --overwrite to replace it")
 
-    scratch_parent = (args.scratch_parent or args.cli.resolve().parent).resolve()
+    scratch_parent = (args.scratch_parent or cli.parent).resolve()
     if not scratch_parent.is_dir() or not str(scratch_parent).isascii():
         parser.error("Scratch parent must exist and have an ASCII-only path")
     # Keep the Lua default for the Unicode countdown glyph. Passing it via WSL
@@ -102,8 +121,8 @@ def main() -> None:
         shutil.copy2(source, staged_input)
         shutil.copy2(args.templater, staged_templater)
         prepared_helper(args.helper, staged_helper)
-        run_macro(args.cli, staged_helper, staged_input, stage1, ALIAS, dialog)
-        run_macro(args.cli, staged_templater, stage1, stage2, "Apply karaoke template")
+        run_macro(cli, staged_helper, staged_input, stage1, ALIAS, dialog)
+        run_macro(cli, staged_templater, stage1, stage2, "Apply karaoke template")
         before, _ = count_ass(source)
         after, comments = count_ass(stage2)
         if before == 0 or after <= before or comments == 0:

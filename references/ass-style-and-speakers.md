@@ -12,6 +12,8 @@ For MyGO!!!!!, the commonly used band color is `#3388BB`, represented in ASS as 
 
 ## Speaker / actor mapping
 
+For remote mapping from Moegirl Wikitext plus an aligned ASS, follow [aegi-api.md](aegi-api.md). Apply that service before final style adjustments: it rebuilds the ASS header and styles. Keep furigana disabled when the existing readings should be retained.
+
 The fifth CSV field of an ASS `Dialogue` event is `Name`, treated by the jpkara/Aegisub template as the speaker or actor. It is not the style name and does not automatically change color:
 
 ```text

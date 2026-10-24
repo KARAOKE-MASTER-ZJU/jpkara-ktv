@@ -12,6 +12,7 @@ Read only the reference needed for the current operation:
 - Setup and forced alignment: [references/setup-and-alignment.md](references/setup-and-alignment.md)
 - Lyrics lookup and cleanup: [references/lyrics-sources.md](references/lyrics-sources.md)
 - ASS styles, speakers, and `color_table`: [references/ass-style-and-speakers.md](references/ass-style-and-speakers.md)
+- Remote Wikitext speaker assignment, furigana, and Aegisub video metadata: [references/aegi-api.md](references/aegi-api.md)
 - Bilibili DASH download: [references/bilibili-download.md](references/bilibili-download.md)
 - Rendering, audio muxing, verification, and exact clipping: [references/render-and-verify.md](references/render-and-verify.md)
 
@@ -20,6 +21,7 @@ Read only the reference needed for the current operation:
 Reusable helpers live in [scripts/](scripts/):
 
 - `split_lyrics.py`: split overlong lines (default 15 characters) without cutting an ASCII word.
+- `moegirl_wikitext.py`: export full-page Wikitext through a native Linux Playwright browser with a private persistent login profile; see the lyrics reference for setup and manual login.
 - `yohane_readings_to_fa.py`: generate FA-Kara `{surface|reading}` text with jpkara/YOHANE.
 - `ass_to_fa_lyrics.py`: convert existing jpkara ASS reading tags to FA-Kara input without rerunning reading analysis.
 - `run_fa_kara.py`: run FA-Kara on vocals-only audio and copy native `o.ass` to a named output; CPU is the safe default.
@@ -66,16 +68,22 @@ If a video already has the correct burned-in subtitles but the wrong audio, mux 
 3. Ask the user to choose the alignment engine (`jpkara/yohane` or `FA-Kara`) before running alignment. If `jpkara/yohane` is missing, follow the portable clone/setup/validation flow in the setup reference; do not silently skip forced alignment. If FA-Kara is selected, verify its checkout and dependencies instead.
 4. Obtain UTF-8 lyrics, one sung line per line, using the lyrics reference. Do not reproduce full copyrighted lyrics in the response.
 5. Generate or align ASS with the selected engine, preserving `Name`/Actor fields when present. For FA-Kara, convert existing annotated ASS text into its required reading format and run alignment only; do not rerun or delegate reading analysis to FA-Kara.
-6. Apply requested ASS style, title, color, and speaker mappings using the ASS reference.
+6. Apply requested ASS style, title, color, and speaker mappings using the ASS reference. For the `aegi.umi-cv.com` service, follow the API reference below; run it before final style adjustments because it rebuilds the ASS header and styles.
 7. Save the aligned, reading-annotated source as `result.ass`; if backing/harmony vocals are aligned separately, save those as `result_har.ass`. Run the Aegisub CLI template section below to produce `new.ass` and, when applicable, `new_har.ass` before video rendering. Do not overwrite a source ASS with its expanded template output.
 8. Create or replace lyric-cover visuals with `make_cover_video.py` when requested; label removal or artwork repair is an upstream image-editing step, not an FFmpeg crop/blur operation.
 9. Render or remux using the rendering reference. Prefer `render_on_off.py` for paired outputs, then verify streams, duration, audio intent, and ON-audio packet identity.
+
+## 萌娘百科分词与 ASS 处理 API
+
+获取萌娘百科 Wikitext 时：如果是 GPT 桌面版，直接使用 Computer Use 操作浏览器；如果是命令行环境，使用 Playwright（`scripts/moegirl_wikitext.py`）。若当前环境未提供 Computer Use，应明确说明，不要假定可以调用；两种方式都只读取源码，不提交编辑。
+
+The [Aegisub ASS Tool](https://aegi.umi-cv.com/) ([source repository](https://github.com/KARAOKE-MASTER-ZJU/subtitle-moegirl-itool)) accepts aligned ASS plus Moegirl Wikitext to assign singers and colors, optionally annotate furigana, and add `[Aegisub Project Garbage]` pointing to the song video. Read [references/aegi-api.md](references/aegi-api.md) before calling its `POST /api/process` endpoint. For already annotated/aligned lyrics, use `enable_furigana=false` to retain the existing readings. This service rebuilds styles/templates and normalizes lyric styles to `Default`; use it after alignment and before final style edits and Aegisub CLI template expansion. It returns source ASS content for `result.ass` / `result_har.ass`, not the fully expanded `new.ass` / `new_har.ass`. Keep the input until output timing, readings, actor assignments, and styles have been checked.
 
 ## 用 Aegisub CLI 生成并保存 KTV 模板特效
 
 Use [scripts/aegisub_cli_template.py](scripts/aegisub_cli_template.py) after timing, readings, style, and speaker edits are complete. It runs Karaoke Helper's **转换为双层交错形式** (K1/K2) and then Aegisub's **Apply karaoke template**, saving the expanded ASS. This is ASS effect generation; burning it into MP4 is a later FFmpeg step. Input/output names are fixed by convention: `result.ass` → `new.ass`, and separate backing/harmony vocals `result_har.ass` → `new_har.ass`. Do not treat a `new*.ass` as the source for another template run.
 
-The script needs [Myaamori/aegisub-cli](https://github.com/Myaamori/aegisub-cli), the user's `karaoke-helper.lua`, and Aegisub's `kara-templater.lua`. It makes a temporary ASCII-name copy of the helper containing only an ASCII CLI alias for the second macro; the user's original Lua is unchanged. It also stages Chinese-named ASS paths and leaves the Unicode countdown glyph at the Lua default, avoiding observed Windows CLI encoding failures. It refuses to replace an existing output unless `--overwrite` is given. Read [references/render-and-verify.md](references/render-and-verify.md#aegisub-cli-template-expansion) for the exact command and validation.
+The skill bundles a local snapshot of all 46 `.lua` files under this machine's Aegisub `automation/` directory in [assets/aegisub-automation/](assets/aegisub-automation/), preserving their relative paths. The two required Lua scripts are used by default, so on this machine the command is simply `python /home/birchtree/.codex/skills/jpkara-ktv/scripts/aegisub_cli_template.py result.ass` from the song directory. The Aegisub CLI executable itself is not bundled; the wrapper finds this machine's E: installation, `AEGISUB_CLI`, or PATH. It makes a temporary ASCII-name copy of the helper containing only an ASCII CLI alias for the second macro; the bundled Lua is unchanged. It also stages Chinese-named ASS paths and leaves the Unicode countdown glyph at the Lua default, avoiding observed Windows CLI encoding failures. It refuses to replace an existing output unless `--overwrite` is given. For sources, setup, and validation read [references/render-and-verify.md](references/render-and-verify.md#aegisub-cli-template-expansion).
 
 ## Bilibili submission conventions
 
