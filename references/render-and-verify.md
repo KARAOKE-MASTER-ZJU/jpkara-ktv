@@ -31,44 +31,32 @@ python scripts/make_cover_video.py \
 
 The crop is song-specific; inspect a frame before choosing it. `--blur-sigma`, `--cover-size`, and `--cover-y` are adjustable. If a label or watermark must be removed, first create or supply a clean `--cover-image`; the script deliberately performs no generative removal and makes no copyright-status claim.
 
-## Paired ON/OFF rendering
+## Rendering commands
 
-Use `scripts/render_on_off.py` when both versions are needed. It burns the ASS into the video once, copies the original/full-mix AAC packet-for-packet into ON VOCAL, encodes the Instrumental to stereo AAC for OFF VOCAL, validates both files, and decodes their final second. Never pass a `Vocals` stem as `--full-mix`.
+Use `render_on_off.py` for single or paired outputs; do not write a per-song FFmpeg wrapper. Stereo AAC full mix is copied and packet-hash verified; other full-mix codecs are encoded to AAC once. `--on-audio copy` enforces copying, while `--on-audio aac` explicitly rebuilds the audio. Never pass a `Vocals` stem as `--full-mix`.
 
-```bash
-python scripts/render_on_off.py \
-  --video input_cover_replaced.mp4 --ass NEW2.ass \
-  --instrumental '1_input_(Instrumental).wav' \
-  --output-prefix 'song' --preview-png preview.png
-```
-
-Normally inspect a preview when layout or fonts changed. If the user requested no preview, omit `--preview-png` and use the spacing checks in the ASS reference; do not add a preview approval gate. The script defaults `--full-mix` to `--video`, uses NVENC when available with a libx264 fallback, and refuses to overwrite existing outputs unless `--overwrite` is supplied.
-
-## Burn subtitles with NVENC
-
-If an isolated vocals stem is used only as a temporary base, do not label that file `on_vocal`; mux the full mix afterward:
+ON only, 1080p software compatibility encode, no preview:
 
 ```bash
-ffmpeg -y -i input.mp4 -i "1_input_(Vocals).mp3" \
-  -map 0:v:0 -map 1:a:0 -vf 'subtitles=new.ass' \
-  -c:v h264_nvenc -preset p5 -tune hq -rc:v vbr -cq:v 19 -b:v 0 \
-  -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 \
-  -shortest -movflags +faststart subtitle_video.mp4
+python "$KTV_SKILL_DIR/scripts/render_on_off.py" \
+  --video input.mp4 --ass new.ass --mode on \
+  --width 1920 --height 1080 --encoder libx264 --preset fast --quality 18 \
+  --output-prefix song --verify full
 ```
 
-For the finished on-vocal file, use the source video's original/full-mix audio:
+Paired outputs with expanded main/harmony ASS merged automatically:
 
 ```bash
-ffmpeg -y -i rendered_video.mp4 -i input.mp4 \
-  -map 0:v:0 -map 1:a:0 -c:v copy -c:a copy \
-  -shortest -movflags +faststart on_vocal.mp4
+python "$KTV_SKILL_DIR/scripts/render_on_off.py" \
+  --video input.mp4 --ass new.ass --harmony-ass new_har.ass \
+  --instrumental instrumental.wav --output-prefix song
 ```
 
-For off-vocal, map the instrumental stem. If both outputs share burned-in video, render once and mux two audio tracks rather than encoding video twice.
+`--mode off` needs only the video/ASS and instrumental. Omit `--harmony-ass` when absent. Output names are `PREFIX_ON_VOCAL.mp4` / `PREFIX_OFF_VOCAL.mp4` for the requested modes only. `PREFIX_render.json` records streams, encoder, audio-copy hash when applicable, and verification. The video is encoded once for paired output. Temporary media and merged ASS are cleaned automatically; `--subbed-output` explicitly retains silent burned video. Validation finishes before replacing final media. No `-shortest` truncation is used to hide missing audio/video tails.
 
-## Verify
+Use `--encoder auto` for NVENC with software fallback, or select explicitly. `--quality` means NVENC CQ or x264 CRF; presets are encoder-specific. `--threads` bounds CPU encoding. Width/height must be supplied together; omit them to preserve source dimensions. `--verify tail` is the normal default, `--verify full` decodes the whole output with errors treated as failures. Read `--help` for less common switches.
 
-For every final MP4, use `ffprobe` to confirm one H.264 video stream, one AAC stereo audio stream, matching duration, and the intended audio source. Write temporary outputs and replace targets only after validation. Report whether the video was encoded or only remuxed.
+Normally inspect a preview when layout or fonts changed; add `--preview-png` only when wanted. If the user requested no preview, use the source spacing repair/geometry checks and render directly. Do not introduce a preview approval gate. Source audio identity and stem intent still need the audio checks from SKILL.md; a valid container does not prove the correct soundtrack was chosen.
 
 ## Reuse ASS with a replacement source
 

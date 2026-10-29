@@ -2,6 +2,14 @@
 
 Use this procedure for a Bilibili BV URL, BV ID, or `b23.tv` short URL. It is an offline downloader: fetch the DASH video and audio resources completely, then mux them into a local MP4. It does not implement real-time mixing.
 
+For a BV id or full video URL, use the maintained command instead of reimplementing the procedure:
+
+```bash
+python "$KTV_SKILL_DIR/scripts/bilibili_download.py" VIDEO_URL --output input.mp4
+```
+
+`--page` overrides URL `p=` (both are 1-based). Use a fresh song/source directory; existing output or metadata needs explicit `--overwrite`. The helper writes actual selected-track metadata, checks completeness, and removes download intermediates only after successful merging/validation. Resolve `b23.tv` to a full BV URL first. Read the protocol below only for diagnosis or changes to the helper.
+
 ## 1. Resolve the BV ID and target page
 
 - Accept a `BV...` ID or a `b23.tv` short URL.

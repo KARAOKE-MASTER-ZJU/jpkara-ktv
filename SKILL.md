@@ -20,6 +20,10 @@ Read only the reference needed for the current operation:
 
 Reusable helpers live in [scripts/](scripts/):
 
+Use these helpers before writing shell pipelines or per-song Python. Set `KTV_SKILL_DIR` to the discovered skill directory and invoke its scripts from the song directory. Read only the selected command's `--help`; open implementation or protocol references when a missing feature or failure requires it. Add recurring missing operations to these maintained helpers with behavior checks instead of creating another disposable wrapper. Do not make a new per-song `build.py`, `download.py`, `replace.py`, or verification script for an operation already covered below.
+
+Rendering prints concise stages/errors and saves detailed verification to JSON. Template expansion hides successful automation logs (`--verbose` restores them). Read report fields needed for the next decision rather than dumping full probes, frame progress, scripts, or all reference documents into context.
+
 - `split_lyrics.py`: split overlong lines (default 15 characters) without cutting an ASCII word.
 - `moegirl_wikitext.py`: export full-page Wikitext through a native Linux Playwright browser with a private persistent login profile; see the lyrics reference for setup and manual login.
 - `yohane_readings_to_fa.py`: generate FA-Kara `{surface|reading}` text with jpkara/YOHANE.
@@ -32,10 +36,12 @@ Reusable helpers live in [scripts/](scripts/):
 - `fix_okurigana_ass.py`: split mixed kanji/okurigana words after FA-Kara so ruby stays above kanji only (for example, `終|<お` followed by plain `わって`).
 - `normalize_fa_lyrics.py`: repair existing FA-Kara input so mixed words use kanji-only readings (`{終|お}わって`, `{見|み}つけ{出|だ}して`) before alignment.
 - `make_cover_video.py`: create a 1920×1080 lyric/album-cover video with an enlarged blurred background, a smaller sharp square cover, adjustable top clearance, and bit-identical AAC copied from a source video.
-- `render_on_off.py`: burn an ASS video once, then mux a verified original/full-mix ON VOCAL version and an Instrumental OFF VOCAL version without encoding the subtitle video twice.
-- `aegisub_cli_template.py`: run Aegisub CLI's K1/K2 interleave macro followed by Apply karaoke template; save the fully expanded effect ASS with the standard name.
+- `fix_countdown_spacing.py`: repair source ASS countdown spacing above K1 ruby, preserve timing, and refuse expanded effects; supports dry-run and configurable gap.
+- `render_on_off.py`: `--mode on|off|both`, optional `--harmony-ass`, explicit output dimensions/quality, AAC copy or one-pass conversion, full/tail verification, and automatic JSON report. Burn the subtitle video only once.
+- `aegisub_cli_template.py`: expand K1/K2 and karaoke templates; `--fix-countdown` repairs source spacing before expansion, avoiding a separate editing script.
+- `bilibili_download.py`: download actual 1080P DASH tracks concurrently, retry safely, save actual-track metadata, merge offline, validate duration, and clean download intermediates after success.
 - `bilibili_metadata.py`: fetch a Bilibili BV URL's title, description, tags, owner, pages, dimensions, durations, statistics, rights, and non-expiring stream summaries into a JSON sidecar.
-- `bilibili_submit.py`: dry-run or submit verified ON/OFF videos as one Bilibili archive using `source_metadata.json`; supports UPOS chunk upload, local Cookie credentials, and QR login.
+- `bilibili_submit.py`: dry-run/submit ON/OFF; `--aid ... --replace-part on|off` edits an existing archive while preserving other parts, saves retry receipts, and reads back status. No separate uploader/editor wrapper is needed.
 
 The splitter is deterministic but needs a manual phrasing review. YOHANE reading generation and FA-Kara alignment remain separate: FA-Kara does not provide readings.
 
@@ -103,6 +109,8 @@ Use lowercase Bilibili part titles `on vocal` and `off vocal`, including when co
 
 When authorized to replace an ON or OFF part, read the current archive first, retain unaffected parts and their CIDs, and upload only the corrected part. A user may have removed or renamed parts since the last attempt; do not replay stale archive data. Verify returned part filenames/CIDs, part order, credits, lowercase titles, and copyright type. Preserve current cover and unrelated user edits. Persist upload identifiers for retries. Use the server-provided UPOS filename stem rather than the local filename. The archive-view response is not directly an edit payload: convert `recreate` objects to their integer `switch` value and subtitle settings to `{open, lan}`. Do not resubmit after a successful response; read back its state. Report upload/submission acceptance, transcoding completion, and review/publication as separate states. A successful edit response or successful OFF part does not establish that ON transcoding passed. Keep any requested title-only exception for an existing archive.
 
+Use `bilibili_submit.py source_metadata.json --video song_ON_VOCAL.mp4 --aid ARCHIVE_AID --replace-part on` for the read-only edit preview, then the same command with `--submit` when authorized. Edit preview needs authenticated archive lookup; it does not upload. Existing metadata is preserved unless explicitly overridden; `--update-source` updates the source-credit line. If adding ON back to an OFF-only archive, explicitly supply the reviewed paired `--title` when appropriate. Reuse the saved receipt on a retry of the same file; use another `--receipt` for a genuinely new replacement file. An uncertain prior POST stops automatic retry.
+
 After validated replacement, clean only temporary files and failed downloads owned by this task. Preserve installed UVR weights, both stems, reusable ASS, final media, source attribution, and upload receipts. Never publish session-specific absolute paths, drive layouts, cookies, signed media URLs, or production traces in this skill; use configurable variables and generic examples.
 
 ## 视频下载
@@ -113,7 +121,7 @@ Use `yt-dlp --no-playlist -f "bv*+ba/b" --merge-output-format mp4`, then verify 
 
 ### Bilibili
 
-Download DASH video and audio separately, save them completely, and merge offline with FFmpeg. Do not real-time mix, use top-level quality as proof of 1080P, or silently downgrade a missing `id == 80` track. Follow [references/bilibili-download.md](references/bilibili-download.md).
+Run `python "$KTV_SKILL_DIR/scripts/bilibili_download.py" VIDEO_URL --output input.mp4`; URL `p=` or `--page` selects a part. The helper saves the source metadata automatically. Do not write another downloader. See [references/bilibili-download.md](references/bilibili-download.md) only for protocol details or troubleshooting; do not silently downgrade a missing `id == 80` track.
 
 ### m3u8 stream
 

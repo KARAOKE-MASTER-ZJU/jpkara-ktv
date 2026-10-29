@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from fix_countdown_spacing import fix_file
 
 
 ALIAS = "InterleaveK1K2"
@@ -47,12 +48,17 @@ def prepared_helper(source: Path, destination: Path) -> None:
 
 
 def run_macro(cli: Path, script: Path, source: Path, target: Path, macro: str,
-              dialog: dict | None = None) -> None:
+              dialog: dict | None = None, verbose: bool = False) -> None:
     cmd = [str(cli), "--automation", win_path(script)]
     if dialog is not None:
         cmd += ["--dialog", json.dumps({"button": 0, "values": dialog}, ensure_ascii=False)]
     cmd += [win_path(source), win_path(target), macro]
-    subprocess.run(cmd, cwd=script.parent, check=True)
+    try:
+        subprocess.run(cmd, cwd=script.parent, check=True, capture_output=not verbose, text=True)
+    except subprocess.CalledProcessError as error:
+        if not verbose:
+            print(((error.stdout or '') + (error.stderr or ''))[-6000:], file=sys.stderr)
+        raise
     if not target.is_file() or target.stat().st_size == 0:
         raise RuntimeError(f"Aegisub CLI did not produce {target}")
 
@@ -84,6 +90,10 @@ def main() -> None:
     parser.add_argument("--output", type=Path, help="defaults to new.ass or new_har.ass")
     parser.add_argument("--scratch-parent", type=Path, help="ASCII-only Windows-accessible directory; defaults to CLI directory")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--fix-countdown", action="store_true",
+                        help="repair source Intro spacing before template expansion")
+    parser.add_argument("--countdown-gap", type=float, help="countdown/ruby gap in pixels")
+    parser.add_argument('--verbose', action='store_true', help='show full Aegisub automation logs')
     args = parser.parse_args()
     cli = discover_cli(args.cli)
     if cli is None:
@@ -109,6 +119,8 @@ def main() -> None:
     # argv corrupts the glyph in this Windows CLI build.
     dialog = {"style": "Default", "advance_time": 2000, "extend_time": 1000,
               "sep_threshold": 4000, "countdown": True}
+    if args.fix_countdown:
+        print(json.dumps(fix_file(source, source, args.countdown_gap)))
     with tempfile.TemporaryDirectory(prefix="ktv_cli_", dir=scratch_parent) as scratch_name:
         scratch = Path(scratch_name)
         staged_input = scratch / "input.ass"
@@ -119,8 +131,8 @@ def main() -> None:
         shutil.copy2(source, staged_input)
         shutil.copy2(args.templater, staged_templater)
         prepared_helper(args.helper, staged_helper)
-        run_macro(cli, staged_helper, staged_input, stage1, ALIAS, dialog)
-        run_macro(cli, staged_templater, stage1, stage2, "Apply karaoke template")
+        run_macro(cli, staged_helper, staged_input, stage1, ALIAS, dialog, args.verbose)
+        run_macro(cli, staged_templater, stage1, stage2, "Apply karaoke template", verbose=args.verbose)
         before, _ = count_ass(source)
         after, comments = count_ass(stage2)
         if before == 0 or after <= before or comments == 0:

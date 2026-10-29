@@ -14,6 +14,7 @@ import re
 import stat
 import time
 import urllib.parse
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -239,6 +240,100 @@ def metadata_payload(metadata: dict[str, Any], video: Path, cid: str, args: argp
     }
 
 
+def edit_payload(data: dict, part: str, replacement: dict, args: argparse.Namespace, metadata: dict) -> dict:
+    archive = data['archive']
+    keys = ('aid', 'title', 'cover', 'cover43', 'copyright', 'tid', 'tag', 'desc',
+            'desc_format_id', 'source', 'no_reprint', 'dynamic', 'interactive',
+            'is_only_self', 'dtime', 'dolby', 'lossless_music')
+    payload = {key: archive[key] for key in keys if key in archive}
+    recreate = archive.get('recreate', -1)
+    subtitle = data.get('subtitle') or {}
+    payload.update(recreate=recreate.get('switch', -1) if isinstance(recreate, dict) else recreate,
+                   subtitle={'open': int(subtitle.get('allow', subtitle.get('open', 0))),
+                             'lan': subtitle.get('lan', '')},
+                   no_disturbance=data.get('no_disturbance', 0))
+    for key in ('title', 'cover'):
+        if getattr(args, key, None) is not None:
+            payload[key] = getattr(args, key)
+    if args.description is not None:
+        payload['desc'] = args.description
+    if args.update_source:
+        url = metadata.get('source_url')
+        if not url:
+            raise ValueError('Metadata has no source_url')
+        pattern = r'(?m)^片源\s*[:：].*$'
+        credit = '片源：' + url
+        payload['desc'] = re.sub(pattern, lambda _: credit, payload['desc']) if re.search(pattern, payload['desc']) else payload['desc'] + '\n' + credit
+    if len(payload['title']) > 80:
+        raise ValueError('Title exceeds 80 characters')
+    videos = [{k: v.get(k, '') for k in ('filename', 'cid', 'title', 'desc')} for v in data['videos']]
+    matches = [i for i, v in enumerate(videos) if re.search(rf'\b{part}[ _-]vocal\b', v['title'], re.I)]
+    if len(matches) > 1:
+        raise ValueError('Ambiguous replacement: multiple matching part titles')
+    replacement = {**replacement, 'title': part + ' vocal', 'desc': ''}
+    if matches:
+        videos[matches[0]] = replacement
+    else:
+        videos.insert(0 if part == 'on' else len(videos), replacement)
+    payload['videos'] = videos
+    return payload
+
+
+def replace_part(args: argparse.Namespace, video: Path, metadata: dict) -> int:
+    session, cookies = make_session(args)
+    data = json_request(session, 'GET', f'{MEMBER}/x/vupre/web/archive/view', params={'aid': args.aid})['data']
+    receipt_path = args.receipt or args.metadata.parent / f'edit_{args.aid}_{args.replace_part}.json'
+    receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
+    preview = edit_payload(data, args.replace_part,
+                           {'filename': video.stem, 'cid': '<upload-biz-id>'}, args, metadata)
+    if not args.submit:
+        print(json.dumps({'operation': 'edit', 'payload': preview}, ensure_ascii=False, indent=2))
+        print('dry-run: read-only archive lookup; --submit uploads/replaces only the selected part')
+        return 0
+    digest = hashlib.sha256()
+    with video.open('rb') as stream:
+        for block in iter(lambda: stream.read(4 * 1024 * 1024), b''):
+            digest.update(block)
+    identity = {'aid': args.aid, 'part': args.replace_part, 'sha256': digest.hexdigest()}
+    if receipt and any(receipt.get(k) != v for k, v in identity.items()):
+        raise ValueError('Receipt belongs to another file/operation; choose a new --receipt')
+
+    def save():
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = receipt_path.with_name(receipt_path.name + '.tmp')
+        temporary.write_text(json.dumps(receipt, ensure_ascii=False, indent=2))
+        temporary.replace(receipt_path)
+
+    if not receipt:
+        info, cid = upload_file(session, video)
+        receipt = {**identity, 'filename': Path(info['upos_uri']).stem, 'cid': int(cid), 'state': 'uploaded'}
+        save()
+    if receipt.get('response') or any(v['cid'] == receipt['cid'] for v in data['videos']):
+        print(json.dumps({'already_submitted': True, 'archive': data['archive']['state_desc'],
+                          'part_present': any(v['cid'] == receipt['cid'] for v in data['videos']),
+                          'cid': receipt['cid']}, ensure_ascii=False))
+        return 0
+    if receipt.get('state') == 'submitting':
+        raise RuntimeError('Previous edit result is uncertain; inspect archive before retrying')
+    payload = edit_payload(data, args.replace_part,
+                           {k: receipt[k] for k in ('filename', 'cid')}, args, metadata)
+    csrf = cookies.get('bili_jct') or session.cookies.get('bili_jct')
+    payload['csrf'] = csrf
+    receipt['state'] = 'submitting'
+    save()
+    result = json_request(session, 'POST', f'{MEMBER}/x/vu/web/edit',
+                          params={'csrf': csrf, 'ts': int(time.time() * 1000)}, json=payload)
+    receipt.update(state='submitted', response=result)
+    save()
+    readback = json_request(session, 'GET', f'{MEMBER}/x/vupre/web/archive/view', params={'aid': args.aid})['data']
+    receipt['readback'] = {'state': readback['archive']['state_desc'], 'videos': readback['videos']}
+    save()
+    if not any(v['cid'] == receipt['cid'] for v in readback['videos']):
+        raise RuntimeError('Edit accepted but new CID not yet visible; inspect archive instead of resubmitting')
+    print(json.dumps({'result': result, 'readback': receipt['readback']}, ensure_ascii=False, indent=2))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("metadata", type=Path, help="source_metadata.json")
@@ -259,11 +354,23 @@ def main() -> int:
     parser.add_argument("--push-dynamic", action="store_true")
     parser.add_argument("--private", action="store_true", help="submit as only-visible-to-self")
     parser.add_argument("--no-source-note", action="store_true")
+    parser.add_argument('--aid', type=int, help='existing archive aid; requires --replace-part')
+    parser.add_argument('--replace-part', choices=('on', 'off'), help='replace/add only this part in an existing archive')
+    parser.add_argument('--receipt', type=Path, help='persist upload CID, file identity and edit response for safe retries')
+    parser.add_argument('--update-source', action='store_true', help='update existing archive source credit from metadata')
     args = parser.parse_args()
     metadata = json.loads(args.metadata.read_text(encoding="utf-8"))
     video = args.video or next(iter(sorted(args.metadata.parent.glob("*_ON_VOCAL.mp4"))), None)
     if not video or not video.is_file():
         parser.error("找不到已渲染的 ON 视频，请用 --video 指定成片")
+    if bool(args.aid) != bool(args.replace_part):
+        parser.error('--aid and --replace-part must be supplied together')
+    if (args.receipt or args.update_source) and not args.replace_part:
+        parser.error('--receipt/--update-source require --aid and --replace-part')
+    if args.replace_part:
+        if args.off_video or args.part_title or args.aid <= 0 or not args.video:
+            parser.error('Part replacement requires positive --aid and an explicit single --video')
+        return replace_part(args, video, metadata)
     if args.off_video and not args.off_video.is_file():
         parser.error("找不到 --off-video 指定的 OFF 成片")
     if args.off_video and args.off_video.resolve() == video.resolve():
