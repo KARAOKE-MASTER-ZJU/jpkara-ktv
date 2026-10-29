@@ -25,7 +25,7 @@ Browser route: in GPT desktop, use the available Computer Use tool directly to o
 
 When the user requests the normal authenticated browser workflow, use `scripts/moegirl_wikitext.py`. It opens Linux Chromium through Playwright, follows the article's full-page Edit/View-source tab, and reads `textarea#wpTextbox1.value`. It never submits an edit. This preserves `LyricsKai`, `colors`, `charas`, and speaker markers for the ASS API; do not replace this input with rendered/plain lyrics or section-only source. Anonymous `zh.moegirl.org.cn/api.php` returned `action-notallowed: Unauthorized API call` in our test; authenticated API access has not been verified. This helper does not call that API or bypass denied access.
 
-Local setup uses `/home/birchtree/.local/share/ktv-playwright/venv`, a single Chromium installation in the adjacent `browsers/`, and a private `profile/` outside the skill/repository. WSLg supplies the visible Linux window. Do not read/copy the user's Windows browser cookies. Do not commit the profile, credentials, traces, or browser binaries. Browser disk/media cache targets are 32/16 MiB, not a total profile-size guarantee.
+Use a dedicated Playwright virtual environment, a shared Chromium installation, and a private persistent profile outside the skill/repository. Discover or configure these locations on the current machine; do not document a user's installation paths. WSLg can supply the visible Linux window. Do not read/copy the user's Windows browser cookies. Do not commit the profile, credentials, traces, or browser binaries. Browser disk/media cache targets are 32/16 MiB, not a total profile-size guarantee.
 
 ```bash
 # First use: manually sign in, then close the browser window.

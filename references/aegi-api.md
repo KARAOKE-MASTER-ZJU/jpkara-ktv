@@ -5,7 +5,7 @@ Use this reference for Wikitext-based singer assignment (分词), furigana annot
 - Service: https://aegi.umi-cv.com/
 - Source: https://github.com/KARAOKE-MASTER-ZJU/subtitle-moegirl-itool
 - Live schema: https://aegi.umi-cv.com/openapi.json
-- Local checkout: `/home/birchtree/aegisub-tools` when available. Compare its revision with the service schema before assuming local code matches deployment.
+- Local checkout: discover or configure the available `aegisub-tools` checkout. Compare its revision with the service schema before assuming local code matches deployment.
 
 The interface below was verified against the live schema and synthetic ASS requests on 2026-10-23. Refer to the live schema if it changes.
 

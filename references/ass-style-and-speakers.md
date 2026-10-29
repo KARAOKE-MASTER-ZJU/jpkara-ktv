@@ -6,6 +6,14 @@ ASS colors use BGR order (`#RRGGBB` becomes `&HBBGGRR`). Scale requested styles 
 
 For a title, update `[Script Info]` with `Title:` and add a short `Dialogue` event using the existing `Title` style. Keep karaoke timing lines and template comments intact.
 
+## Font, ruby, and countdown spacing
+
+When reverting a font/style, identify the actual saved version rather than guessing from labels such as “the version before last.” Preserve its main/ruby size ratio, K1/K2 spacing, and margins. A font change can alter glyph metrics even at the same nominal size; check widths and vertical bounds again.
+
+Reserve separate vertical space for upper-row kanji, its ruby, lower-row lyrics/ruby, and the `Intro` countdown (`●●●`). Include outlines, glow, and template offsets in the bounds. A countdown margin copied from another font or row height can put the circles across the first kanji. Move the countdown above the upper ruby with a visible gap, then regenerate the expanded ASS from its source; moving only the already-expanded file leaves the next build broken. Do not copy fixed pixel margins blindly between resolutions.
+
+Normally inspect representative rendered frames after layout changes. If the user explicitly requests direct rendering without previews, honor that request, check expanded positions and bounds numerically, and validate the final encode without adding a preview approval step.
+
 For ASS editing details, use the [Aegisub Manual](https://aeg-dev.github.io/AegiSite/docs/3.0/Main_Page/), especially [Styles](https://aeg-dev.github.io/AegiSite/docs/3.0/Styles/) and [ASS Tags](https://aeg-dev.github.io/AegiSite/docs/3.0/ASS_Tags/). Use documented syntax for `\\k`, `\\1c`, `\\3c`, `\\pos`, and `\\an`.
 
 For MyGO!!!!!, the commonly used band color is `#3388BB`, represented in ASS as `&HBB8833`; apply it to the relevant accent and karaoke template default while preserving readable white text and outline contrast.

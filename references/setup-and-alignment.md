@@ -2,6 +2,16 @@
 
 Read this reference when jpkara/yohane is missing or a new Japanese lyric alignment is required.
 
+## Reuse installed UVR models before downloading
+
+When UVR is installed, first inspect its configured model directories and any locations the user identified. Under WSL, include the relevant mounted Windows installation; searching only the Linux cache is insufficient. Record the selected model filename, backend, and settings. Prefer existing compatible weights over a fresh download, and do not replace the installed original.
+
+Check the separator's companion metadata before inference. For `audio-separator`, this can include `vr_model_data.json`, `mdx_model_data.json`, model hashes, and model-parameter files. Existing weights alone may still trigger network access if this lookup data is absent. Reuse matching metadata supplied with the installation; a metadata failure is not evidence that the weights need downloading again.
+
+If the separator requires a different directory layout, stage a private working directory with symlinks or copies and the needed metadata. Use a filesystem that supports symlinks; otherwise copy deliberately. Avoid installing dependencies, caches, and credentials into the UVR installation itself. If the audio reader cannot decode a downloaded WebM/Opus file, decode it to PCM WAV first while preserving its time origin, channel layout, and rate.
+
+Run one compatible existing model and validate its outputs before trying alternatives. Confirm both stems cover the intended source interval and assess vocal suppression on sung passages. Delete only this task's failed/partial downloads and disposable staging after success, never the user's original weights or unrelated cache files.
+
 ## Portable setup
 
 Do not assume this computer already has either repository. Keep repository URLs public and never hard-code tokens or credentials.
@@ -71,10 +81,12 @@ The command writes FA-Kara's native `o.ass` and auxiliary LRC files in its worki
 1. Before alignment, run `normalize_fa_lyrics.py` so `{終わって|おわって}` becomes `{終|お}わって` and visible okurigana is not repeated as ruby.
 2. Run FA-Kara on the normalized reading text and vocals-only audio.
 3. Run `normalize_furigana_ass.py` so bare continuation markers `#|reading` become Aegisub/jpkara `#|<reading`.
-4. Run `fix_okurigana_ass.py` on the aligned ASS. This is a safety pass for mixed tokens that survived input normalization; it must preserve karaoke timing while leaving only the kanji reading above the kanji.
+4. Run `fix_okurigana_ass.py` on the aligned ASS. This is a safety pass for mixed Japanese tokens that survived input normalization; it must preserve karaoke timing while leaving only the kanji reading above the kanji. Preserve intentional Latin/French surface text and its pronunciation annotation from the normalized ASS if a Japanese-only cleanup helper would replace it with kana. Compare visible lyrics before and after cleanup.
 5. Only then apply styles, speakers, colors, titles, or Aegisub karaoke templates. Do not flatten/remove furigana when the requested deliverable needs readings.
 
 Validate the dialogue count, visible lyrics, readings, empty Actor fields when no speaker mapping was requested, and absence of duplicated okurigana such as `終わって|<お ... #|<わっ ... #|<て`. Then copy/rename the ASS only after validation. FA-Kara's native style is not jpkara's template style; if the user requires jpkara styles, apply them as a separate post-processing step without changing alignment timings. Force CPU with `CUDA_VISIBLE_DEVICES=''` when a small GPU may OOM, and report that FA-Kara is alignment-only if the user asks about its capabilities.
+
+For noisy live recordings or dense harmony, prefer the isolated vocals for alignment and review suspicious long tails over instrumental gaps. Burned-in lyrics may appear before singing starts; their appearance times are not acoustic ground truth. If a short response, foreign-language phrase, or ending is misaligned, rerun only a bounded vocals crop and add its crop offset back exactly once. Keep separately sung responses in separate events when needed; avoid shifting an otherwise valid whole song to repair one phrase.
 
 ## Reusable helpers
 

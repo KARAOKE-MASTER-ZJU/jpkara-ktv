@@ -9,7 +9,7 @@ Use this skill for Japanese song KTV work: obtaining source media, generating or
 
 Read only the reference needed for the current operation:
 
-- Setup and forced alignment: [references/setup-and-alignment.md](references/setup-and-alignment.md)
+- Existing UVR models, setup, and forced alignment: [references/setup-and-alignment.md](references/setup-and-alignment.md)
 - Lyrics lookup and cleanup: [references/lyrics-sources.md](references/lyrics-sources.md)
 - ASS styles, speakers, and `color_table`: [references/ass-style-and-speakers.md](references/ass-style-and-speakers.md)
 - Remote Wikitext speaker assignment, furigana, and Aegisub video metadata: [references/aegi-api.md](references/aegi-api.md)
@@ -41,12 +41,18 @@ The splitter is deterministic but needs a manual phrasing review. YOHANE reading
 
 ## Alignment engine choice (mandatory)
 
-Before invoking any alignment engine, ask the user which one to use for this run:
+Before the first alignment run, establish the user's engine choice; ask if neither the current request nor the ongoing task already specifies one:
 
 - `jpkara/yohane`: can perform reading/furigana analysis and forced alignment. Use it for a complete lyrics → annotated/aligned ASS workflow.
-- `FA-Kara` (`~/FA-Kara`, commonly installed as `/home/birchtree/FA-Kara`; repository: [moriwx/FA-Kara](https://github.com/moriwx/FA-Kara)): alignment only. It does **not** provide a reading/furigana service. Supply already annotated lyrics in FA-Kara's `{surface|reading}` format plus vocals-only audio; it produces its own karaoke ASS timing. Do not call FA-Kara expecting it to generate or correct readings.
+- `FA-Kara` (repository: [moriwx/FA-Kara](https://github.com/moriwx/FA-Kara)): alignment only. It does **not** provide a reading/furigana service. Supply already annotated lyrics in FA-Kara's `{surface|reading}` format plus vocals-only audio; it produces its own karaoke ASS timing. Do not call FA-Kara expecting it to generate or correct readings.
 
-Ask this even when the user requests a rerun; if the user explicitly names an engine in the current request, confirm that choice before running it. If FA-Kara is selected, read the FA-Kara section in [references/setup-and-alignment.md](references/setup-and-alignment.md) and keep reading generation separate.
+An explicit engine choice in the current task is sufficient; carry it through continuations and retries. Ask only when the choice is missing or the user requests a change. Reusing an existing ASS for styling, rendering, or a verified replacement source does not require another alignment run or engine question. If FA-Kara is selected, read the FA-Kara section in [references/setup-and-alignment.md](references/setup-and-alignment.md) and keep reading generation separate.
+
+## Resource and source preferences
+
+If UVR is installed, inspect its existing weights and companion model metadata first, including user-mentioned drives and Windows installations when running under WSL. Prefer a compatible installed model; do not download a duplicate merely because a Python separator uses a different cache directory. See the setup reference for staging and cleanup.
+
+For this user's workflow, prefer a complete, matching Bilibili video when available, unless the user explicitly chooses another source. YouTube-derived media may encounter Bilibili transcoding compatibility problems; this is a fallback consideration, not proof that YouTube is the cause of any particular failure. Verify the actual version, quality, and duration, retain original MV attribution when known, and check synchronization before reusing an ASS with another source.
 
 ## Critical audio invariant
 
@@ -65,7 +71,7 @@ If a video already has the correct burned-in subtitles but the wrong audio, mux 
 1. Inspect available files, streams, durations, subtitle tracks, and GPU encoders.
 2. If source media comes from a platform, use the matching download section below and verify it before alignment.
    For every Bilibili source, run `bilibili_metadata.py` immediately after resolving the BV id and keep the JSON sidecar beside the downloaded media as `source_metadata.json` (the existing KTV convention). Its compact schema intentionally omits uploader, bitrate, and page-list fields unless the user asks for them. Keep the `tags` array at no more than 10 entries, selecting source/search-supported tags. If the description provides an original source URL, preserve it as `source_material_url`; do not invent one from a bare note such as `片源: ytb`. Never store signed DASH `base_url` values in the sidecar because they expire.
-3. Ask the user to choose the alignment engine (`jpkara/yohane` or `FA-Kara`) before running alignment. If `jpkara/yohane` is missing, follow the portable clone/setup/validation flow in the setup reference; do not silently skip forced alignment. If FA-Kara is selected, verify its checkout and dependencies instead.
+3. Confirm the alignment engine (`jpkara/yohane` or `FA-Kara`) from the user's instructions, asking only if the choice is missing. If `jpkara/yohane` is missing, follow the portable clone/setup/validation flow in the setup reference; do not silently skip forced alignment. If FA-Kara is selected, verify its checkout and dependencies instead.
 4. Obtain UTF-8 lyrics, one sung line per line, using the lyrics reference. Do not reproduce full copyrighted lyrics in the response.
 5. Generate or align ASS with the selected engine, preserving `Name`/Actor fields when present. For FA-Kara, convert existing annotated ASS text into its required reading format and run alignment only; do not rerun or delegate reading analysis to FA-Kara.
 6. Apply requested ASS style, title, color, and speaker mappings using the ASS reference. For the `aegi.umi-cv.com` service, follow the API reference below; run it before final style adjustments because it rebuilds the ASS header and styles.
@@ -83,7 +89,7 @@ The [Aegisub ASS Tool](https://aegi.umi-cv.com/) ([source repository](https://gi
 
 Use [scripts/aegisub_cli_template.py](scripts/aegisub_cli_template.py) after timing, readings, style, and speaker edits are complete. It runs Karaoke Helper's **转换为双层交错形式** (K1/K2) and then Aegisub's **Apply karaoke template**, saving the expanded ASS. This is ASS effect generation; burning it into MP4 is a later FFmpeg step. Input/output names are fixed by convention: `result.ass` → `new.ass`, and separate backing/harmony vocals `result_har.ass` → `new_har.ass`. Do not treat a `new*.ass` as the source for another template run.
 
-The skill bundles a local snapshot of all 46 `.lua` files under this machine's Aegisub `automation/` directory in [assets/aegisub-automation/](assets/aegisub-automation/), preserving their relative paths. The two required Lua scripts are used by default, so on this machine the command is simply `python /home/birchtree/.codex/skills/jpkara-ktv/scripts/aegisub_cli_template.py result.ass` from the song directory. The Aegisub CLI executable itself is not bundled; the wrapper finds this machine's E: installation, `AEGISUB_CLI`, or PATH. It makes a temporary ASCII-name copy of the helper containing only an ASCII CLI alias for the second macro; the bundled Lua is unchanged. It also stages Chinese-named ASS paths and leaves the Unicode countdown glyph at the Lua default, avoiding observed Windows CLI encoding failures. It refuses to replace an existing output unless `--overwrite` is given. For sources, setup, and validation read [references/render-and-verify.md](references/render-and-verify.md#aegisub-cli-template-expansion).
+The skill bundles a snapshot of 46 Aegisub automation `.lua` files in [assets/aegisub-automation/](assets/aegisub-automation/), preserving their relative paths. Invoke `python "$KTV_SKILL_DIR/scripts/aegisub_cli_template.py" result.ass` from the song directory, where `KTV_SKILL_DIR` is the skill's discovered installation directory. The Aegisub CLI executable is not bundled; supply `--cli`, set `AEGISUB_CLI`, or put it on PATH. The wrapper makes a temporary ASCII-name copy of the helper containing an ASCII CLI alias for the second macro; the bundled Lua is unchanged. It stages Chinese-named ASS paths and leaves the Unicode countdown glyph at the Lua default, avoiding observed Windows CLI encoding failures. It refuses to replace existing output unless `--overwrite` is given. For sources, setup, and validation read [references/render-and-verify.md](references/render-and-verify.md#aegisub-cli-template-expansion).
 
 ## Bilibili submission conventions
 
@@ -95,7 +101,9 @@ For authorized submissions, include separate description lines: `片源：<sourc
 
 Use lowercase Bilibili part titles `on vocal` and `off vocal`, including when constructing multipart payloads. These are publication titles; local media filenames do not need renaming. Select tags using search results about the actual song/performers/project, remove unrelated platform campaign tags, and keep at most 10; the script rejects longer lists instead of silently dropping tags. Retain the source URL even for an original/self-made submission. Submit the verified subtitle-rendered media, not the unrendered `input.mp4`.
 
-When authorized to replace an OFF part, reuse the existing archive and ON part, upload only the corrected OFF video, and verify the returned part filenames/CIDs, credits, lowercase titles, and copyright type. Persist upload identifiers for retries. Use the server-provided UPOS filename stem rather than the local filename. The archive-view response is not directly an edit payload: convert `recreate` objects to their integer `switch` value and subtitle settings to `{open, lan}`. Do not resubmit an archive after a successful response; read back its state. Keep any requested title-only exception for an existing archive.
+When authorized to replace an ON or OFF part, read the current archive first, retain unaffected parts and their CIDs, and upload only the corrected part. A user may have removed or renamed parts since the last attempt; do not replay stale archive data. Verify returned part filenames/CIDs, part order, credits, lowercase titles, and copyright type. Preserve current cover and unrelated user edits. Persist upload identifiers for retries. Use the server-provided UPOS filename stem rather than the local filename. The archive-view response is not directly an edit payload: convert `recreate` objects to their integer `switch` value and subtitle settings to `{open, lan}`. Do not resubmit after a successful response; read back its state. Report upload/submission acceptance, transcoding completion, and review/publication as separate states. A successful edit response or successful OFF part does not establish that ON transcoding passed. Keep any requested title-only exception for an existing archive.
+
+After validated replacement, clean only temporary files and failed downloads owned by this task. Preserve installed UVR weights, both stems, reusable ASS, final media, source attribution, and upload receipts. Never publish session-specific absolute paths, drive layouts, cookies, signed media URLs, or production traces in this skill; use configurable variables and generic examples.
 
 ## 视频下载
 

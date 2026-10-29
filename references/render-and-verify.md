@@ -4,10 +4,10 @@ Read this reference when burning ASS subtitles or producing on-vocal/off-vocal M
 
 ## Aegisub CLI template expansion
 
-Before burning subtitles into video, expand the ASS template. From the song directory, with `result.ass` present, the one-line command on this machine is:
+Before burning subtitles into video, expand the ASS template. From the song directory, with `result.ass` present and `KTV_SKILL_DIR` set to the discovered skill directory:
 
 ```bash
-python /home/birchtree/.codex/skills/jpkara-ktv/scripts/aegisub_cli_template.py result.ass
+python "$KTV_SKILL_DIR/scripts/aegisub_cli_template.py" result.ass
 ```
 
 This writes `new.ass`; pass `result_har.ass` to write `new_har.ass`. Keep those names even when the alignment engine changes. To replace a previously generated `new.ass` after reviewing it, add `--overwrite`. The script runs the GUI-equivalent default K1/K2 settings (`Default`, 2000 ms advance, 1000 ms extension, 4000 ms section gap, countdown enabled), then **Apply karaoke template**. It stages files under the CLI directory by default; use `--scratch-parent` if that directory is not writable. The scratch path must be ASCII-only and accessible to the Windows executable.
@@ -42,7 +42,7 @@ python scripts/render_on_off.py \
   --output-prefix 'song' --preview-png preview.png
 ```
 
-Inspect the preview before publishing when layout or fonts changed. The script defaults `--full-mix` to `--video`, uses NVENC when available with a libx264 fallback, and refuses to overwrite existing outputs unless `--overwrite` is supplied.
+Normally inspect a preview when layout or fonts changed. If the user requested no preview, omit `--preview-png` and use the spacing checks in the ASS reference; do not add a preview approval gate. The script defaults `--full-mix` to `--video`, uses NVENC when available with a libx264 fallback, and refuses to overwrite existing outputs unless `--overwrite` is supplied.
 
 ## Burn subtitles with NVENC
 
@@ -69,6 +69,24 @@ For off-vocal, map the instrumental stem. If both outputs share burned-in video,
 ## Verify
 
 For every final MP4, use `ffprobe` to confirm one H.264 video stream, one AAC stereo audio stream, matching duration, and the intended audio source. Write temporary outputs and replace targets only after validation. Report whether the video was encoded or only remuxed.
+
+## Reuse ASS with a replacement source
+
+Confirm the same song version, edit, frame rate, full duration, and start/end content before rendering. Compare decoded audio at the beginning, middle, and end, using normalized correlation when appropriate. A constant offset can be applied once to the ASS; varying offsets indicate an edit or speed difference and require local repair. A difference below the ASS timing resolution generally does not justify a whole-song realignment. Keep the approved font, readings, and lyric timings otherwise intact.
+
+Update the ASS video/audio project references and provenance to the new input. Record the actually downloaded DASH track dimensions and codec rather than copying a top-level quality label or maximum available resolution. Credit the actual rendering source and the original MV separately when both are known. Preserve a verified Bilibili source's suitable full-mix AAC with `-c:a copy` where possible, and verify packet identity.
+
+## Bilibili transcoding diagnosis and repair
+
+Compare a stuck part with a passing part before changing everything. Inspect video codec/profile/pixel format, color primaries/transfer/matrix, audio codec/rate/channels, stream start times and durations, packet PTS/DTS, and AAC skip/discard metadata. Decode the entire suspect file with errors treated as failures. Record observations separately from hypotheses: successful local decoding does not guarantee platform acceptance, and a generic “video data” or color-space message does not identify the defective stream.
+
+Small audio/video duration differences on the scale of an audio packet or video frame are normal in many accepted MP4s. Compare with the passing part and source; do not diagnose a few milliseconds as the root cause or blindly pad/trim until printed durations match. Negative initial DTS from B-frame reordering or codec priming is also not, by itself, corruption. Look for nonmonotonic DTS, discontinuities, missing tail content, or a meaningful sync error.
+
+For SDR compatibility, H.264/yuv420p with correctly signaled BT.709 and AAC stereo in faststart MP4 is a useful baseline. If NVENC output is suspect, a software x264 encode can isolate encoder-related compatibility; CRF 18–20 is a practical quality-preserving starting point, not a guaranteed file size. Encode from the best available source with the corrected ASS rather than repeatedly recompressing successive repairs. If only audio/container repair is needed, preserve the verified burned video with `-c:v copy`.
+
+Treat reports about Gamma 2.6, H.265, or AAC/FLAC interactions as hypotheses unless the file and platform result support them. Inspect the actual transfer tags before blaming Gamma 2.6. Never relabel genuine HDR or gamma-encoded content as BT.709 without the appropriate color conversion. Rebuilding AAC and the MP4 container may help isolate timestamp/metadata issues; an unusual AAC trim value alone is not proof of failure.
+
+When these checks do not establish a cause, try a complete matching Bilibili source according to the user's source preference, first verifying ASS synchronization. Keep a brief record of changed variables and the new upload CID. After authorized replacement, read back each part's state: upload/edit success, completed transcoding, and review/publication are separate milestones. Use bounded polling, report unresolved platform processing honestly, and do not repeatedly upload identical files merely because processing is slow.
 
 ## 视频截取 `t1`–`t2`
 
