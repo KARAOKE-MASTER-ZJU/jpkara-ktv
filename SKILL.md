@@ -56,6 +56,8 @@ An explicit engine choice in the current task is sufficient; carry it through co
 
 ## Resource and source preferences
 
+For future songs, default to the user-approved compact serif KTV style: `Source Han Serif SemiBold`, main size 84 and ruby size 34 at 1920×1080. Apply the exact spacing, margins, and countdown rules in [the approved style preset](references/ass-style-and-speakers.md#approved-default-compact-serif-ktv) after speaker processing and before template expansion. Preserve this preset unless the user requests a change.
+
 If UVR is installed, inspect its existing weights and companion model metadata first, including user-mentioned drives and Windows installations when running under WSL. Prefer a compatible installed model; do not download a duplicate merely because a Python separator uses a different cache directory. See the setup reference for staging and cleanup.
 
 For this user's workflow, prefer a complete, matching Bilibili video when available, unless the user explicitly chooses another source. YouTube-derived media may encounter Bilibili transcoding compatibility problems; this is a fallback consideration, not proof that YouTube is the cause of any particular failure. Verify the actual version, quality, and duration, retain original MV attribution when known, and check synchronization before reusing an ASS with another source.
